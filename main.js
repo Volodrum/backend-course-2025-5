@@ -75,6 +75,29 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(201, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end('201: Створено (або оновлено) в кеші.');
         }
+        // Обробка DELETE (Видалення з кешу)
+        else if (req.method === 'DELETE') {
+            try {
+                await unlink(filePath);
+                // Успіх: 200 (OK)
+                res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('200: Видалено з кешу.');
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    // Не знайдено: 404 (аналогічно до GET)
+                    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    res.end('404: Картинку не знайдено в кеші.');
+                } else {
+                    throw error;
+                }
+            }
+        }
+        // Інші методи
+        else {
+            // 405 (Method Not Allowed)
+            res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('405: Method Not Allowed');
+        }
     } catch (serverError) {
     // Загальна обробка помилок сервера (500)
     console.error(`[Error 500] ${serverError.message}`);
