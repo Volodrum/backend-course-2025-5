@@ -1,0 +1,43 @@
+# Запускайте сервер перед тестуванням (напр. в іншому терміналі):
+# npm run dev -- --host localhost --port 8000 --cache ./my-cache
+#
+# Примітка: для PUT потрібен файл 'my_test_image.jpeg' в поточній директорії
+
+# --- Тестування GET ---
+
+# 1. Спроба отримати картинку, якої ще немає в кеші (очікуємо 404)
+# (Прапорець -v показує заголовки відповіді, вкл. код стану)
+echo "Тест GET (404 Not Found):"
+curl -v http://localhost:8000/200
+
+# --- Тестування PUT ---
+
+# 2. Завантаження картинки для коду 200 в кеш (очікуємо 201 Created)
+echo "\nТест PUT (201 Created):"
+curl -v -X PUT --data-binary "@my_test_image.jpeg" http://localhost:8000/200
+
+# --- Тестування GET (успішне) ---
+
+# 3. Отримання картинки, яку ми щойно завантажили (очікуємо 200 OK)
+# (Прапорець -o зберігає результат у файл)
+echo "\nТест GET (200 OK):"
+curl -v http://localhost:8000/200 -o downloaded_200.jpeg
+echo "Картинку збережено як downloaded_200.jpeg"
+
+# --- Тестування DELETE ---
+
+# 4. Видалення картинки з кешу (очікуємо 200 OK)
+echo "\nТест DELETE (200 OK):"
+curl -v -X DELETE http://localhost:8000/200
+
+# --- Тестування DELETE (неіснуючий) ---
+
+# 5. Спроба видалити картинку, якої вже немає (очікуємо 404 Not Found)
+echo "\nТест DELETE (404 Not Found):"
+curl -v -X DELETE http://localhost:8000/200
+
+# --- Тестування 405 ---
+
+# 6. Спроба використати непідтримуваний метод, напр. POST (очікуємо 405 Method Not Allowed)
+echo "\nТест 405 (Method Not Allowed):"
+curl -v -X POST http://localhost:8000/301
