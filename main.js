@@ -26,9 +26,22 @@ try {
   process.exit(1); // Вихід з процесу, якщо кеш створити неможливо
 }
 
+function getBody(req) {
+  return new Promise((resolve, reject) => {
+    try {
+      const chunks = [];
+      req.on('data', chunk => chunks.push(chunk));
+      req.on('end', () => {
+        resolve(Buffer.concat(chunks));
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 const getFilePath = (url) => {
   const code = url.substring(1);
-  // Всі картинки зберігаємо як .jpeg
   return path.join(cachePath, `${code}.jpeg`);
 };
 
@@ -53,6 +66,14 @@ const server = http.createServer(async (req, res) => {
                     throw error; // Передаємо інші помилки (напр. права доступу)
                 }
             }
+        }
+        // Обробка PUT (Запис в кеш)
+        else if (req.method === 'PUT') {
+            const body = await getBody(req);
+            await writeFile(filePath, body);
+            // Успіх: 201 (Created)
+            res.writeHead(201, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('201: Створено (або оновлено) в кеші.');
         }
     } catch (serverError) {
     // Загальна обробка помилок сервера (500)
