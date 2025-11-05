@@ -3,6 +3,7 @@ const fsSync = require('fs');
 const { readFile, writeFile, unlink } = require('fs').promises;
 const path = require('path');
 const { program } = require('commander');
+const superagent = require('superagent');
 
 // Налаштування аргументів командного рядка
 program
@@ -48,22 +49,47 @@ const getFilePath = (url) => {
 // Запуск веб-сервера
 const server = http.createServer(async (req, res) => {
     const filePath = getFilePath(req.url);
+    const httpCode = req.url.substring(1);
 
     try {
         // Обробка GET (Читання з кешу)
         if (req.method === 'GET') {
             try {
+                // Спроба читання з кешу
                 const data = await readFile(filePath);
-                // Успіх: 200 (OK) + картинка
+                console.log(`[Cache] HIT: Повернення ${httpCode} з кешу.`);
                 res.writeHead(200, { 'Content-Type': 'image/jpeg' });
                 res.end(data);
             } catch (error) {
+                // Якщо в кеші не знайдено
                 if (error.code === 'ENOENT') {
-                    // Не знайдено: 404
-                    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-                    res.end('404: Картинку не знайдено в кеші.');
+                    console.log(`[Cache] MISS: ${httpCode} не знайдено. Запит до https://http.cat ...`);
+
+                    try {
+                        // Робимо запит до http.cat
+                        const response = await superagent.get(`https://http.cat/${httpCode}`);
+                        
+                        // superagent повертає тіло картинки у response.body
+                        const imageData = response.body;
+                        
+                        // Зберігаємо в кеш (асинхронно)
+                        await writeFile(filePath, imageData);
+                        console.log(`[Cache] WRITE: ${httpCode} збережено в кеш.`);
+                        
+                        // Повертаємо картинку клієнту
+                        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+                        res.end(imageData);
+                        
+                    } catch (fetchError) {
+                        // Помилка запиту до http.cat (напр. 404 від самого http.cat)
+                        console.error(`[http.cat] Помилка запиту для ${httpCode}: ${fetchError.status || fetchError.message}`);
+                        // Повертаємо 404 клієнту, як вимагалось
+                        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                        res.end('404: Картинку не знайдено (ні в кеші, ні на http.cat).');
+                    }
+                
                 } else {
-                    throw error; // Передаємо інші помилки (напр. права доступу)
+                    throw error;
                 }
             }
         }
