@@ -1,5 +1,6 @@
 const http = require('http');
-const fs = require('fs');
+const fsSync = require('fs');
+const { readFile, writeFile, unlink } = require('fs').promises;
 const path = require('path');
 const { program } = require('commander');
 
@@ -18,19 +19,47 @@ const options = program.opts();
 const cachePath = path.resolve(options.cache);
 
 try {
-  // { recursive: true } дозволяє створювати вкладені директорії
-  // і не видає помилку, якщо директорія вже існує
-  fs.mkdirSync(cachePath, { recursive: true });
+  fsSync.mkdirSync(cachePath, { recursive: true });
   console.log(`[Cache] Директорія кешу готова: ${cachePath}`);
 } catch (error) {
   console.error(`[Error] Не вдалося створити директорію кешу: ${error.message}`);
   process.exit(1); // Вихід з процесу, якщо кеш створити неможливо
 }
 
+const getFilePath = (url) => {
+  const code = url.substring(1);
+  // Всі картинки зберігаємо як .jpeg
+  return path.join(cachePath, `${code}.jpeg`);
+};
+
 // Запуск веб-сервера
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end(`Сервер запущено на ${options.host}:${options.port}\n`);
+const server = http.createServer(async (req, res) => {
+    const filePath = getFilePath(req.url);
+
+    try {
+        // Обробка GET (Читання з кешу)
+        if (req.method === 'GET') {
+            try {
+                const data = await readFile(filePath);
+                // Успіх: 200 (OK) + картинка
+                res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+                res.end(data);
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    // Не знайдено: 404
+                    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    res.end('404: Картинку не знайдено в кеші.');
+                } else {
+                    throw error; // Передаємо інші помилки (напр. права доступу)
+                }
+            }
+        }
+    } catch (serverError) {
+    // Загальна обробка помилок сервера (500)
+    console.error(`[Error 500] ${serverError.message}`);
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('500: Internal Server Error');
+  }
 });
 
 server.on('error', (err) => {
